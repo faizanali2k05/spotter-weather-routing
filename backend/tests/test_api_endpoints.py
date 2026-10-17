@@ -133,3 +133,4 @@ class TestApiEndpoints:
         data = resp.json()
         assert data['origin']['name'] == 'New York, NY'
         assert 'corridor_heatmap' in data
+

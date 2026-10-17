@@ -68,3 +68,4 @@ cd frontend
 npm run build
 ```
 Ensures zero TypeScript compilation errors and successful production bundling with Vite.
+

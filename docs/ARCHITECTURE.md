@@ -107,3 +107,4 @@ frontend/src/
 - Strict environment variable handling via `python-dotenv` and Docker environment variables.
 - CORS configured with `django-cors-headers` allowing local development (`localhost:5173`, `127.0.0.1:5173`) and Vercel domains (`spotter-weather-routing.vercel.app` and preview branch regexes).
 - No sensitive keys or credentials committed to source control.
+

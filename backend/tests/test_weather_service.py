@@ -125,3 +125,4 @@ class TestWeatherService:
         out2 = get_weather_for_checkpoints(pts, etas)
         assert out2[0]['wind_mph'] == 18.0
         assert mock_get.call_count == 1  # No second call
+

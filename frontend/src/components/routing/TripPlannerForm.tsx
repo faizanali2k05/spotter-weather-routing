@@ -137,3 +137,4 @@ export const TripPlannerForm: React.FC<TripPlannerFormProps> = ({
     </form>
   );
 };
+

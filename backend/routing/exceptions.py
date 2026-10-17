@@ -126,3 +126,4 @@ def custom_exception_handler(exc, context):
         'code': 'INTERNAL_SERVER_ERROR',
         'details': {},
     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+

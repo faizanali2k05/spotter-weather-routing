@@ -97,3 +97,4 @@ class TestRoutingProvider:
         res = adapter.get_routes({'name': 'A'}, {'name': 'B'})
         assert len(res) == 1
         assert fallback.get_routes.called
+

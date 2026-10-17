@@ -44,3 +44,4 @@ This document provides transparent, engineering-grade documentation of current s
 1. **Persistent Redis Cache:** Replace the in-memory coordinate cache with Redis for distributed multi-worker caching across scaled Render backend containers.
 2. **Turn-by-Turn Truck Speed Segments:** Incorporate road-segment specific heavy vehicle speed profiles (e.g. 55 mph highway limit vs passenger car 70 mph) to refine checkpoint ETA calculations.
 3. **Severe Weather Push Alerts:** Webhook or WebSocket alerts dispatched to fleet managers when sudden storm fronts intersect active in-transit routes.
+

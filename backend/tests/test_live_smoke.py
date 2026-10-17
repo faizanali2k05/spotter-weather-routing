@@ -22,3 +22,4 @@ class TestLiveExternalProvidersSmoke:
         assert len(plan['routes']) >= 1
         assert 'corridor_heatmap' in plan
         assert len(plan['corridor_heatmap']['frames']) > 0
+

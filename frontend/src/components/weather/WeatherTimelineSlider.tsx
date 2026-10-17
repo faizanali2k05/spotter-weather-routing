@@ -86,3 +86,4 @@ export const WeatherTimelineSlider: React.FC<WeatherTimelineSliderProps> = ({
     </div>
   );
 };
+

@@ -89,3 +89,4 @@ Add the following under **Project Settings > Environment Variables**:
 
 3. **Verify End-to-End Route Calculation:**
    Open the production Vercel URL in a browser, enter `New York, NY` to `Philadelphia, PA`, and confirm routes, checkpoints, and spatial weather heatmaps render correctly.
+

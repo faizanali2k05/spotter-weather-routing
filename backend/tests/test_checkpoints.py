@@ -44,3 +44,4 @@ class TestCheckpoints:
         checkpoints = route_checkpoints([[-74.0, 40.0]], 0, 25)
         assert len(checkpoints) == 1
         assert checkpoints[0]['mile'] == 0.0
+

@@ -202,3 +202,4 @@ All non-200 responses return a consistent, sanitized error structure:
 | `502 Bad Gateway` | `PROVIDER_MALFORMED_RESPONSE` | External provider returned invalid or unparseable payload. |
 | `504 Gateway Timeout` | `PROVIDER_TIMEOUT` | Routing or weather provider request exceeded timeout threshold. |
 | `500 Internal Error` | `INTERNAL_SERVER_ERROR` | Unhandled server exception (logged server-side without leaking secrets). |
+

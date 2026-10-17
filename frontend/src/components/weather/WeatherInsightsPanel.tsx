@@ -98,3 +98,4 @@ export const WeatherInsightsPanel: React.FC<WeatherInsightsPanelProps> = ({ rout
     </div>
   );
 };
+

@@ -63,3 +63,4 @@ export async function requestTripPlan(request: PlanRequest): Promise<TripPlan> {
 
   return data;
 }
+

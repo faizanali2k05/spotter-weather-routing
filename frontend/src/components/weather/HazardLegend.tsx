@@ -16,3 +16,4 @@ export const HazardLegend: React.FC = () => {
     </div>
   );
 };
+

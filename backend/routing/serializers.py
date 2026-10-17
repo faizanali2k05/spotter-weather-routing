@@ -82,3 +82,4 @@ class PlanRequestSerializer(serializers.Serializer):
         if value > now + timedelta(hours=48):
             raise serializers.ValidationError("Departure must be within the supported 48-hour forecast horizon.")
         return value
+

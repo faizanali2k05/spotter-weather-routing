@@ -205,3 +205,4 @@ class TestSummarizeAndRanking:
         unsafe_reason = build_recommendation_reason(unsafe_route, [unsafe_route])
         assert "not recommended" in unsafe_reason.lower()
         assert "postpone" in unsafe_reason.lower()
+

@@ -119,3 +119,4 @@ To verify end-to-end communication with real OpenStreetMap, OSRM, and Open-Meteo
 ```bash
 RUN_LIVE_TESTS=1 .venv/bin/pytest backend/tests/test_live_smoke.py
 ```
+

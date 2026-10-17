@@ -227,3 +227,4 @@ def get_routing_provider(provider_type: Optional[str] = None) -> RoutingProvider
     """Factory function for acquiring the configured routing provider."""
     # Default to OSRM free provider
     return OSRMProvider()
+

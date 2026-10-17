@@ -25,3 +25,4 @@ export const ErrorBanner: React.FC<ErrorBannerProps> = ({ message, code, onRetry
     </div>
   );
 };
+

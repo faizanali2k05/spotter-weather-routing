@@ -101,3 +101,4 @@ class TestGeocoding:
         assert res1 == res2 == res3
         # Should only call HTTP once because subsequent calls hit in-memory cache
         assert mock_get.call_count == 1
+

@@ -139,3 +139,4 @@ def geocode_place(query: str, session: Optional[requests.Session] = None) -> Dic
     # Cache successful lookup
     GEOCODE_CACHE[cache_key] = result
     return result
+
