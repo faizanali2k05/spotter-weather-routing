@@ -50,21 +50,41 @@ def fetch_routes(origin,destination):
     return routes[:3]
 
 def weather_at(points,arrival_times):
-    """Forecast time matching for individual points; cache rounded coordinates per request."""
-    cache={};out=[]
-    for point,eta in zip(points,arrival_times):
-        key=(round(point['lat'],2),round(point['lon'],2))
-        if key not in cache:
-            data=get_json('https://api.open-meteo.com/v1/forecast',{'latitude':key[0],'longitude':key[1],'hourly':'wind_speed_10m,rain,snowfall','wind_speed_unit':'mph','precipitation_unit':'inch','timezone':'GMT','forecast_days':5})
-            hourly=data['hourly']
-            cache[key]=hourly
+    """Batch hourly forecasts for unique checkpoint coordinates to reduce latency."""
+    keys=[(round(p['lat'],2),round(p['lon'],2)) for p in points]
+    unique=list(dict.fromkeys(keys))
+    cache={}
+    batch_size=20
+    for start in range(0,len(unique),batch_size):
+        batch=unique[start:start+batch_size]
+        params={
+            'latitude':','.join(str(p[0]) for p in batch),
+            'longitude':','.join(str(p[1]) for p in batch),
+            'hourly':'wind_speed_10m,rain,snowfall',
+            'wind_speed_unit':'mph',
+            'precipitation_unit':'inch',
+            'timezone':'GMT',
+            'forecast_days':5,
+        }
+        data=get_json('https://api.open-meteo.com/v1/forecast',params)
+        entries=data if isinstance(data,list) else [data]
+        if len(entries)!=len(batch):
+            raise ValueError('Weather provider returned incomplete checkpoint forecasts.')
+        for key,entry in zip(batch,entries):
+            hourly=entry['hourly']
+            cache[key]={**hourly,'_index':{t:i for i,t in enumerate(hourly['time'])}}
+    out=[]
+    for key,eta in zip(keys,arrival_times):
         hourly=cache[key]
         when=eta.astimezone(timezone.utc).replace(minute=0,second=0,microsecond=0).strftime('%Y-%m-%dT%H:00')
-        if when not in hourly['time']:
+        i=hourly['_index'].get(when)
+        if i is None:
             raise ValueError('Forecast unavailable for this checkpoint arrival time. Choose a departure within the forecast horizon.')
-        i=hourly['time'].index(when)
-        # Open-Meteo snowfall is cm/hr, convert to inches/hr.
-        out.append({'wind_mph':round(float(hourly['wind_speed_10m'][i] or 0),1),'rain_inches_hr':round(float(hourly['rain'][i] or 0),3),'snow_inches_hr':round(float(hourly['snowfall'][i] or 0)/2.54,3)})
+        out.append({
+            'wind_mph':round(float(hourly['wind_speed_10m'][i] or 0),1),
+            'rain_inches_hr':round(float(hourly['rain'][i] or 0),3),
+            'snow_inches_hr':round(float(hourly['snowfall'][i] or 0)/2.54,3),
+        })
     return out
 
 def build_plan(origin_text,destination_text,departure,load_lbs,spacing):
