@@ -29,6 +29,16 @@ This document provides transparent, engineering-grade documentation of current s
 - Open-Meteo utilizes numerical weather prediction (NWP) model grids (e.g. GFS / ECMWF / HRRR). While regional and interstate conditions are accurately captured, hyper-local microclimates (such as sudden mountain pass ice or localized wind gusts in canyons) may vary from model averages.
 - The system should always be used as an advisory planning tool alongside official Department of Transportation (DOT) 511 traveler information systems.
 
+### 2.3 Open-Meteo IP-Based Rate Limits on Shared Cloud Hosting (Render)
+- **Shared Egress IP Constraints:** Open-Meteo's free tier enforces rate limits per IP address (600 calls/min, 5,000 calls/hour). On multi-tenant platforms such as Render, all free and starter containers share common outbound NAT IP pools. Noisy neighbors on the same Render host or IP block can trigger HTTP 429 rate limits regardless of individual application traffic volume.
+- **Architectural Mitigations Implemented:**
+  - Unified multi-coordinate pre-batching (up to 50 locations per single HTTP call), reducing requests by ~75%.
+  - Shared 30-minute in-memory caching across all route alternatives and corridor grid points.
+  - HTTP 429 exponential backoff retry with `Retry-After` header parsing.
+  - Graceful degradation: If external rate limits prevent generating the corridor heatmap, route planning and waypoint evaluations still succeed completely.
+  - Optional `OPEN_METEO_API_KEY` configuration to route to commercial endpoints (`customer-api.open-meteo.com`).
+- **Recommended Production Resolution:** Upgrade to an Open-Meteo commercial plan with `OPEN_METEO_API_KEY` configured, or attach a dedicated outbound static IP to the Render deployment.
+
 ---
 
 ## 3. Geocoding Rate Limits & Usage Policies

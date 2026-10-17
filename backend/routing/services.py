@@ -6,15 +6,15 @@ batched weather forecasting, risk evaluation, route ranking, and corridor heatma
 import logging
 import math
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import requests
 
-from .exceptions import InputValidationError, ForecastHorizonError, RouteNotFoundError
+from .exceptions import InputValidationError, ForecastHorizonError, RouteNotFoundError, ProviderRateLimitError
 from .geocoding import geocode_place
 from .routing_provider import get_routing_provider
-from .weather_service import get_weather_for_checkpoints
+from .weather_service import get_weather_for_checkpoints, fetch_batch_forecasts
 from .risk import classify_detailed, summarize, ranking_key, build_recommendation_reason
-from .corridor_service import build_corridor_heatmap
+from .corridor_service import build_corridor_heatmap, generate_corridor_grid
 
 logger = logging.getLogger('spotter.services')
 
@@ -133,17 +133,68 @@ def build_plan(
     if not raw_routes:
         raise RouteNotFoundError(f"No routes available between {origin['name']} and {destination['name']}.")
 
-    processed_routes = []
+    # 1. Resample checkpoints and compute arrival times for all alternatives
+    routes_intermediate = []
+    all_checkpoint_coords: List[Tuple[float, float]] = []
+
     for idx, r in enumerate(raw_routes):
         geometry = r['geometry']
         duration = r['duration_seconds']
         distance = r['distance_meters'] * MILES_PER_METER
-
         checkpoints = route_checkpoints(geometry, duration, spacing_miles)
         etas = [base_dt + timedelta(seconds=p['offset_seconds']) for p in checkpoints]
+        routes_intermediate.append({
+            'idx': idx,
+            'geometry': geometry,
+            'duration': duration,
+            'distance': distance,
+            'checkpoints': checkpoints,
+            'etas': etas,
+        })
+        for pt in checkpoints:
+            all_checkpoint_coords.append((round(pt['lat'], 2), round(pt['lon'], 2)))
 
-        # Batched weather fetching
-        forecasts = get_weather_for_checkpoints(checkpoints, etas, session=sess)
+    # Deduplicate route coordinates
+    unique_route_coords = list(dict.fromkeys(all_checkpoint_coords))
+
+    # Generate corridor grid points (default 12 for compact, efficient spatial sampling)
+    corridor_grid = generate_corridor_grid(raw_routes, max_grid_points=12)
+
+    # 2. Unified weather prefetching across all route alternatives AND corridor heatmap
+    all_plan_coords = list(dict.fromkeys(unique_route_coords + corridor_grid))
+
+    prefetched_forecasts: Dict[Tuple[float, float], Dict[str, Any]] = {}
+    try:
+        prefetched_forecasts = fetch_batch_forecasts(all_plan_coords, session=sess)
+    except ProviderRateLimitError as exc:
+        logger.warning(
+            "Combined batch weather query was rate-limited (%s). Retrying essential route coordinates only...",
+            exc
+        )
+        prefetched_forecasts = fetch_batch_forecasts(unique_route_coords, session=sess)
+    except Exception as exc:
+        logger.warning(
+            "Combined batch weather query failed (%s: %s). Falling back to essential route coordinates only...",
+            exc.__class__.__name__, exc
+        )
+        prefetched_forecasts = fetch_batch_forecasts(unique_route_coords, session=sess)
+
+    # 3. Process each route with prefetched weather (zero extra network calls)
+    processed_routes = []
+    for item in routes_intermediate:
+        idx = item['idx']
+        geometry = item['geometry']
+        duration = item['duration']
+        distance = item['distance']
+        checkpoints = item['checkpoints']
+        etas = item['etas']
+
+        forecasts = get_weather_for_checkpoints(
+            checkpoints,
+            etas,
+            session=sess,
+            prefetched_forecasts=prefetched_forecasts,
+        )
 
         enriched_checkpoints = []
         for pt, eta, fc in zip(checkpoints, etas, forecasts):
@@ -187,15 +238,27 @@ def build_plan(
         route['recommended'] = is_rec
         route['recommendation_reason'] = build_recommendation_reason(route, processed_routes)
 
-    # Build spatial corridor heatmap dataset
-    corridor_heatmap = build_corridor_heatmap(
-        processed_routes,
-        base_dt,
-        load_lbs,
-        session=sess,
-        forecast_hours=48,
-        hour_step=3,
-    )
+    # 4. Build spatial corridor heatmap dataset (graceful fallback if unavailable)
+    corridor_heatmap = None
+    try:
+        corridor_heatmap = build_corridor_heatmap(
+            processed_routes,
+            base_dt,
+            load_lbs,
+            session=sess,
+            forecast_hours=48,
+            hour_step=3,
+            prefetched_forecasts=prefetched_forecasts,
+            max_grid_points=12,
+        )
+    except Exception as exc:
+        logger.warning("Corridor heatmap generation failed or was unavailable: %s", exc)
+        corridor_heatmap = {
+            'corridor_stations_count': 0,
+            'forecast_hours': 48,
+            'step_hours': 3,
+            'frames': [],
+        }
 
     advisory_warning = (
         "Routes use OSRM general driving directions and are NOT certified for commercial truck height/weight/hazmat restrictions. "
@@ -206,6 +269,9 @@ def build_plan(
             "DANGER: All available routes encounter No Travel weather conditions. "
             "Dispatch should be suspended or delayed until severe weather subsides."
         )
+
+    if corridor_heatmap and corridor_heatmap.get('corridor_stations_count', 0) == 0:
+        advisory_warning += " (Notice: Regional corridor heatmap overlay is currently unavailable due to weather provider limits; all route-specific waypoint evaluations remain accurate)."
 
     return {
         'origin': origin,

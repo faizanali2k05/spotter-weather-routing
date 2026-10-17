@@ -4,13 +4,16 @@ Generates a spatially distributed grid around the planned travel corridor,
 retrieves 48-hour forecasts, and provides time-dependent risk intensity frames
 for MapLibre GL heatmap rendering.
 """
+import logging
 import math
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Tuple, Optional
 import requests
 
-from .weather_service import fetch_batch_forecasts, interpolate_weather_at_eta
+from .weather_service import fetch_batch_forecasts, interpolate_weather_at_eta, get_cached_forecast
 from .risk import classify_detailed
+
+logger = logging.getLogger('spotter.corridor')
 
 # Risk weight map for heatmap rendering (0.0 to 1.0)
 RISK_WEIGHTS = {
@@ -32,7 +35,7 @@ def haversine_miles(coord1: Tuple[float, float], coord2: Tuple[float, float]) ->
     return 3958.7613 * 2 * math.asin(min(1.0, math.sqrt(a)))
 
 
-def generate_corridor_grid(routes: List[Dict[str, Any]], max_grid_points: int = 16) -> List[Tuple[float, float]]:
+def generate_corridor_grid(routes: List[Dict[str, Any]], max_grid_points: int = 12) -> List[Tuple[float, float]]:
     """
     Generate an evenly distributed grid of sample coordinates surrounding the route corridors.
     Samples within a buffer envelope of ~30 miles from the actual route geometries.
@@ -100,26 +103,59 @@ def build_corridor_heatmap(
     session: Optional[requests.Session] = None,
     forecast_hours: int = 48,
     hour_step: int = 3,
+    prefetched_forecasts: Optional[Dict[Tuple[float, float], Dict[str, Any]]] = None,
+    max_grid_points: int = 12,
 ) -> Dict[str, Any]:
     """
     Build spatial corridor heatmap dataset for hours 0 to 48.
     hour_step of 3 gives 17 temporal frames (0h, 3h, 6h, ..., 48h) providing smooth timeline scrubbing
     with compact payload size.
+    Reuses prefetched forecasts and cached forecasts, gracefully degrading if external provider limits are encountered.
     """
-    grid_coords = generate_corridor_grid(routes)
+    grid_coords = generate_corridor_grid(routes, max_grid_points=max_grid_points)
     if not grid_coords:
-        return {'grid_points': [], 'frames': []}
+        return {'corridor_stations_count': 0, 'forecast_hours': forecast_hours, 'step_hours': hour_step, 'frames': []}
 
-    forecast_map = fetch_batch_forecasts(grid_coords, session=session)
+    forecast_map: Dict[Tuple[float, float], Dict[str, Any]] = dict(prefetched_forecasts or {})
+    missing_coords: List[Tuple[float, float]] = []
+
+    for pt in grid_coords:
+        if pt in forecast_map:
+            continue
+        cached = get_cached_forecast(pt[0], pt[1])
+        if cached:
+            forecast_map[pt] = cached
+        else:
+            missing_coords.append(pt)
+
+    if missing_coords:
+        try:
+            new_forecasts = fetch_batch_forecasts(missing_coords, session=session)
+            forecast_map.update(new_forecasts)
+        except Exception as exc:
+            logger.warning(
+                "Corridor heatmap grid forecast fetch skipped or rate-limited (%s: %s). Heatmap will use available stations.",
+                exc.__class__.__name__, exc
+            )
 
     frames = []
     utc_dep = departure_time.astimezone(timezone.utc)
+
+    # If no stations have forecast data at all, return empty frames safely
+    valid_stations = [pt for pt in grid_coords if pt in forecast_map]
+    if not valid_stations:
+        return {
+            'corridor_stations_count': 0,
+            'forecast_hours': forecast_hours,
+            'step_hours': hour_step,
+            'frames': [],
+        }
 
     for h_offset in range(0, forecast_hours + 1, hour_step):
         frame_time = utc_dep + timedelta(hours=h_offset)
         points_data = []
 
-        for pt in grid_coords:
+        for pt in valid_stations:
             hourly = forecast_map.get(pt)
             if not hourly:
                 continue
@@ -152,7 +188,7 @@ def build_corridor_heatmap(
         })
 
     return {
-        'corridor_stations_count': len(grid_coords),
+        'corridor_stations_count': len(valid_stations),
         'forecast_hours': forecast_hours,
         'step_hours': hour_step,
         'frames': frames,

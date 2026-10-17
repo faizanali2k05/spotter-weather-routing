@@ -121,3 +121,34 @@ Map container shows dark background without road networks or tiles.
 2. `MapView` wraps rendering in `map.once('load', ...)` or checks `map.isStyleLoaded()`.
 3. Check browser network tab for blocked font or tile requests.
 
+---
+
+## 6. Render Production Open-Meteo `PROVIDER_RATE_LIMIT` (HTTP 429)
+
+### Symptom
+On Render production, calculating routes returns `HTTP 429` with error code `PROVIDER_RATE_LIMIT`:
+```json
+{
+  "error": "Open-Meteo weather API rate limit exceeded.",
+  "code": "PROVIDER_RATE_LIMIT",
+  "details": {}
+}
+```
+However, the exact same route works reliably when run locally on developer machines.
+
+### Root Cause
+1. **Render Shared Outbound IP Pooling:** Render free and standard container instances share egress IP addresses across many independent tenant applications. Open-Meteo's free tier tracks rate limits strictly by IP address (600 requests/minute, 5,000 requests/hour, 10,000 requests/day). If other container workloads on that Render host or IP block query Open-Meteo, the shared IP's rate limit budget can be exhausted even with minimal traffic from this app.
+2. **Sequential Batch Requests:** Previous implementations issued separate batch requests for Route 1, Route 2, Route 3, and then another for the corridor heatmap, creating rapid bursts of 4+ requests per plan calculation.
+3. **Non-Resilient Heatmap Generation:** If the optional corridor heatmap hit an HTTP 429 or 503, it caused the entire planning request to fail, discarding already-computed route weather analysis.
+
+### Code-Level Mitigations Implemented
+1. **Unified Coordinate Pre-Batching:** All route checkpoints across all alternatives and the corridor grid are consolidated and deduplicated into a single batch query (`BATCH_CHUNK_SIZE=50`), reducing external network requests by ~75%.
+2. **Shared 30-Minute In-Memory Cache:** All coordinates use normalized precision (`round(coord, 2)`) with a 30-minute TTL, eliminating duplicate requests for overlapping corridors or repeat queries.
+3. **HTTP 429 Backoff & Retry:** When Open-Meteo responds with HTTP 429, the service inspects `Retry-After` headers and retries with exponential backoff rather than failing immediately.
+4. **Graceful Heatmap Degradation:** If external rate limits prevent generating the corridor heatmap overlay, the route analysis still succeeds completely with all route alternatives, checkpoints, risk evaluations, and safety recommendations, appending an advisory notice to the response.
+5. **Commercial API Key Support:** Setting `OPEN_METEO_API_KEY` in environment variables automatically routes requests to `customer-api.open-meteo.com` with `apikey` authentication.
+
+### Hosting / Infrastructure Solutions
+- **Commercial Open-Meteo API Key:** Add `OPEN_METEO_API_KEY=<your_key>` in Render environment variables. This routes traffic to Open-Meteo's dedicated commercial infrastructure, lifting IP-based shared limits.
+- **Dedicated Static Outbound IP:** Configure Render with a static outbound IP or deploy an outbound egress proxy (e.g. Squid/HAProxy on a dedicated VPS) so requests do not share noisy-neighbor Render IP pools.
+
