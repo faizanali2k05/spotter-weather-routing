@@ -26,7 +26,7 @@ function App(){
   if(!m.getLayer('weather-halo'))m.addLayer({id:'weather-halo',type:'circle',source:'checkpoints',paint:{'circle-color':['get','color'],'circle-radius':18,'circle-opacity':.14,'circle-blur':.65}});
   if(!m.getLayer('weather-points'))m.addLayer({id:'weather-points',type:'circle',source:'checkpoints',paint:{'circle-color':['get','color'],'circle-radius':6,'circle-stroke-color':'#071d28','circle-stroke-width':2}});
   m.off('click','weather-points',clickPoint);m.on('click','weather-points',clickPoint);
-  function clickPoint(e:maplibregl.MapLayerMouseEvent){const f=e.features?.[0];if(!f)return;const p=f.properties;new maplibregl.Popup({closeButton:true}).setLngLat((f.geometry as GeoJSON.Point).coordinates as [number,number]).setHTML(`<div class="popup"><strong>${p.risk}</strong><p>Mile ${Number(p.mile).toFixed(1)} · ${new Date(p.eta).toLocaleString()}</p><p>Wind ${p.wind} mph · Rain ${p.rain} in/hr · Snow ${p.snow} in/hr</p></div>`).addTo(m)}
+  function clickPoint(e:maplibregl.MapLayerMouseEvent){const f=e.features?.[0];if(!f)return;const p=f.properties;new maplibregl.Popup({closeButton:true}).setLngLat((f.geometry as GeoJSON.Point).coordinates as [number,number]).setHTML(`<div class="popup"><strong>${p.risk}</strong><p>Mile ${Number(p.mile).toFixed(1)} · ${new Date(p.eta).toLocaleString()}</p><p>Wind ${p.wind} mph · Rain ${p.rain} in/hr · Snow ${p.snow} in/hr</p></div>`).addTo(m!)}
   const bounds=new maplibregl.LngLatBounds();active.geometry.forEach(c=>bounds.extend(c as [number,number]));m.fitBounds(bounds,{padding:70,maxZoom:10,duration:700});};
   if(m.isStyleLoaded())render();else m.once('load',render);
  },[plan,selected]);
