@@ -14,7 +14,7 @@ STATIC_URL='static/'
 STATIC_ROOT=BASE_DIR/'staticfiles'
 CORS_ALLOWED_ORIGINS=[x.strip() for x in os.getenv('CORS_ALLOWED_ORIGINS','http://localhost:5173').split(',') if x.strip()]
 # Permit this project's immutable Vercel deployment URLs as well as the production alias.
-CORS_ALLOWED_ORIGIN_REGEXES=[r'^https://spotter-weather-routing(?:-[a-z0-9]+)?-faizanali2k05\.vercel\.app
+CORS_ALLOWED_ORIGIN_REGEXES=[r'^https://spotter-weather-routing(?:-[a-z0-9]+)?-faizanali2k05\.vercel\.app$']
 SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https')
 DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
 ]
