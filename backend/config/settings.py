@@ -17,6 +17,3 @@ CORS_ALLOWED_ORIGINS=[x.strip() for x in os.getenv('CORS_ALLOWED_ORIGINS','http:
 CORS_ALLOWED_ORIGIN_REGEXES=[r'^https://spotter-weather-routing(?:-[a-z0-9]+)?-faizanali2k05\.vercel\.app$']
 SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https')
 DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
-]
-SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO','https')
-DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
