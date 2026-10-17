@@ -8,7 +8,7 @@ type Risk='Low'|'Moderate'|'High'|'Severe'|'No Travel';
 type Checkpoint={mile:number;lon:number;lat:number;eta:string;risk:Risk;weather:{wind_mph:number;rain_inches_hr:number;snow_inches_hr:number}};
 type TripRoute={id:number;distance_miles:number;duration_minutes:number;arrival:string;geometry:number[][];checkpoints:Checkpoint[];summary:{average_risk:number;no_travel:boolean;miles_by_risk:Record<Risk,number>};recommended:boolean};
 type Plan={routes:TripRoute[];origin:{name:string;lat:number;lon:number};destination:{name:string;lat:number;lon:number};has_safe_route:boolean;warning:string};
-const API=(import.meta.env.VITE_API_BASE_URL||'http://localhost:8000').replace(/\/$/,'');
+const API=(import.meta.env.VITE_API_BASE_URL|| (import.meta.env.DEV ? 'http://localhost:8000' : 'https://spotter-weather-routing-api-mx0s.onrender.com')).replace(/\/$/,'');
 const COLORS:Record<Risk,string>={'Low':'#26bd94','Moderate':'#f1c75b','High':'#f59e4b','Severe':'#f0626e','No Travel':'#bd5df2'};
 const dt=new Date(Date.now()+3600000);const initialDate=new Date(dt.getTime()-dt.getTimezoneOffset()*60000).toISOString().slice(0,16);
 function App(){
