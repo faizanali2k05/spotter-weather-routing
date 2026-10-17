@@ -1,29 +1,79 @@
-from datetime import datetime,timezone
-from django.http import JsonResponse
-from django.views.decorators.http import require_GET,require_POST
-from django.views.decorators.csrf import csrf_exempt
-import json
-from .services import build_plan,geocode_place
-@require_GET
-def health(request):return JsonResponse({'status':'ok'})
-@require_GET
+import logging
+from datetime import datetime, timezone
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
+
+from .serializers import GeocodeQuerySerializer, PlanRequestSerializer
+from .geocoding import geocode_place
+from .services import build_plan
+
+logger = logging.getLogger('spotter.views')
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def health(request):
+    """
+    Service health check endpoint.
+    Returns status, version, and server timestamp.
+    """
+    return Response({
+        'status': 'ok',
+        'service': 'spotter-weather-routing-api',
+        'version': '2.0.0',
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'routing_provider': 'OSRM (Demo)',
+        'weather_provider': 'Open-Meteo',
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
 def geocode(request):
-    query=request.GET.get('q','').strip()
-    if len(query)<2:return JsonResponse({'error':'Enter a location.'},status=400)
-    try:return JsonResponse(geocode_place(query))
-    except Exception as exc:return JsonResponse({'error':str(exc)},status=502)
-@csrf_exempt
-@require_POST
+    """
+    Geocode location query string into structured coordinates.
+    Query parameter: ?q=<location_name>
+    """
+    serializer = GeocodeQuerySerializer(data=request.query_params)
+    serializer.is_valid(raise_exception=True)
+
+    query = serializer.validated_data['q']
+    location = geocode_place(query)
+    return Response(location, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def plan(request):
-    try:
-        if len(request.body)>8192:raise ValueError('Request too large.')
-        data=json.loads(request.body)
-        origin=str(data.get('origin','')).strip();destination=str(data.get('destination','')).strip()
-        if not 2<=len(origin)<=180 or not 2<=len(destination)<=180:raise ValueError('Origin and destination must be valid locations.')
-        load=float(data.get('load_lbs',0));spacing=int(data.get('spacing_miles',25))
-        if load<0 or load>100000:raise ValueError('Load must be between 0 and 100,000 lbs.')
-        if spacing not in (10,25,50):raise ValueError('Checkpoint spacing must be 10, 25 or 50 miles.')
-        departure=str(data['departure'])
-        return JsonResponse(build_plan(origin,destination,departure,load,spacing))
-    except (ValueError,TypeError,KeyError,json.JSONDecodeError) as exc:return JsonResponse({'error':str(exc)},status=400)
-    except Exception:return JsonResponse({'error':'Routing or weather provider unavailable. Please try again.'},status=502)
+    """
+    Calculate weather-aware route alternatives and risk exposure.
+    Payload:
+    {
+        "origin": "New York, NY",
+        "destination": "Philadelphia, PA",
+        "departure": "2026-10-18T10:00:00Z",
+        "load_lbs": 35000,
+        "spacing_miles": 25
+    }
+    """
+    serializer = PlanRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    data = serializer.validated_data
+    origin = data['origin']
+    destination = data['destination']
+    departure = data['departure'].isoformat()
+    load_lbs = data['load_lbs']
+    spacing_miles = data['spacing_miles']
+
+    result = build_plan(
+        origin_text=origin,
+        destination_text=destination,
+        departure_str=departure,
+        load_lbs=load_lbs,
+        spacing_miles=spacing_miles,
+    )
+
+    return Response(result, status=status.HTTP_200_OK)
